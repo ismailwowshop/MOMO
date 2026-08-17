@@ -73,12 +73,6 @@ def resolve_momo_stream(live_id):
 
 
 def get_channel_candidates(channel_url):
-    """Get recent video IDs from the official channel Streams page.
-
-    Do not rely on --match-filter with --flat-playlist: depending on the
-    YouTube extractor/client, live_status may not be populated at playlist
-    level, which previously caused both official live channels to return 0.
-    """
     result = subprocess.run(
         [
             "yt-dlp", "--no-warnings", "--ignore-config",
@@ -102,47 +96,54 @@ def get_channel_candidates(channel_url):
         print(f"yt-dlp channel lookup failed: {channel_url}")
         print(result.stderr[-2000:])
 
-    # Prefer entries explicitly reported as live, then inspect the rest.
     candidates.sort(key=lambda item: 0 if item[1] == "is_live" else 1)
     return list(dict.fromkeys(video_id for video_id, _ in candidates))
 
 
 def extract_youtube_hls(video_url):
-    """Resolve a YouTube video to a playable HLS/googlevideo URL."""
+    """Resolve YouTube Live to HLS, preferring clients that avoid GVS PO-token checks.
+
+    Current yt-dlp documentation says HLS live streams do not require a PO token
+    for GVS (except iOS). web_safari exposes HLS formats, while embedded clients
+    can avoid the normal logged-in web request when the video is embeddable.
+    """
     video_id = youtube_video_id(video_url)
     if not video_id:
         return None
 
     canonical_url = f"https://www.youtube.com/watch?v={video_id}"
-    clients = [
-        "youtube:player_client=web,android,tv",
+    client_attempts = [
         "youtube:player_client=web_safari",
-        "youtube:player_client=android",
+        "youtube:player_client=web_embedded",
+        "youtube:player_client=tv_embedded",
+        "youtube:player_client=tv",
     ]
 
-    for extractor_args in clients:
+    for extractor_args in client_attempts:
         result = subprocess.run(
             [
                 "yt-dlp", "--no-warnings", "--ignore-config",
                 "--extractor-args", extractor_args,
-                "--get-url", "-f", "best[protocol^=m3u8]/best",
+                "--get-url",
+                "-f", "best[protocol^=m3u8]/best",
                 canonical_url,
             ],
             capture_output=True, text=True, timeout=120, check=False,
         )
+
         for value in result.stdout.splitlines():
             value = value.strip()
-            if is_youtube_stream(value):
+            if ".m3u8" in value and value.startswith("http"):
                 return value
 
         if result.stderr:
-            print(f"yt-dlp resolve {video_id} ({extractor_args}): {result.stderr[-800:]}")
+            error = result.stderr.strip().replace("\n", " ")
+            print(f"yt-dlp {extractor_args} failed for {video_id}: {error[-1200:]}")
 
     return None
 
 
 def resolve_youtube_stream(channel_url, seed_video_url):
-    """Resolve the requested official channel to a playable stream."""
     try:
         video_ids = get_channel_candidates(channel_url)
         seed_id = youtube_video_id(seed_video_url)
@@ -155,7 +156,7 @@ def resolve_youtube_stream(channel_url, seed_video_url):
             print(f"Trying YouTube video: {video_id}")
             stream = extract_youtube_hls(f"https://www.youtube.com/watch?v={video_id}")
             if stream:
-                print(f"Resolved YouTube video: {video_id}")
+                print(f"Resolved YouTube HLS: {video_id}")
                 return stream
     except Exception as exc:
         print(f"YouTube resolver error for {channel_url}: {exc}")
