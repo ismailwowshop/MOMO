@@ -1,4 +1,7 @@
 #EXTM3U
 
-#EXTINF:-1 tvg-id="MOMO" tvg-name="MOMO購物台" group-title="Taiwan",MOMO購物台
+#EXTINF:-1 tvg-id="MOMO1" tvg-name="MOMO購物台 1" group-title="MOMO",MOMO購物台 1
 https://livestream-dev-source.momoshop.com.tw/live/0601100008j8dsB000.m3u8
+
+#EXTINF:-1 tvg-id="MOMO2" tvg-name="MOMO購物台 2" group-title="MOMO",MOMO購物台 2
+https://livestream-dev-source.momoshop.com.tw/live/0527090004rwwhA000.m3u8
