@@ -15,12 +15,12 @@ FALLBACK_IDS = [
     "0601100008j8dsB000",
     "0527090004rwwhA000",
 ]
-# Temporary YouTube sources supplied by the user for 2026-08-17.
-# Keep these fixed for today's playlist; the resolver converts each live video
-# to its current direct stream URL and falls back to the previous resolved URL.
+# YouTube sources are restricted to the official MOMO accounts requested by the user.
+# The supplied live video URLs are used as today's seed; each run verifies/resolves
+# the channel's current live stream and falls back to the seed/previous URL if needed.
 YOUTUBE_SOURCES = [
-    ("MOMO1-YT", "MOMO購物一台 CH48 - YouTube", "https://www.youtube.com/watch?v=7__QARkZdNs"),
-    ("MOMO2-YT", "MOMO購物二台 CH35 - YouTube", "https://www.youtube.com/watch?v=xbNWkUyxQGM&list=PLNi1dgO66if4mwRZ5LdobeZYDDN53xZQm"),
+    ("MOMO1-YT", "MOMO購物一台 CH48 - YouTube", "https://www.youtube.com/@momoch4812/streams", "https://www.youtube.com/watch?v=7__QARkZdNs"),
+    ("MOMO2-YT", "MOMO購物二台 CH35 - YouTube", "https://www.youtube.com/@momoch3571/streams", "https://www.youtube.com/watch?v=xbNWkUyxQGM&list=PLNi1dgO66if4mwRZ5LdobeZYDDN53xZQm"),
 ]
 W3U = Path("MOMO.w3u")
 
@@ -60,24 +60,35 @@ def resolve_momo_stream(live_id):
     return None
 
 
-def resolve_youtube_stream(video_url):
-    """Resolve a supplied YouTube live/video URL to a direct playable stream."""
+def resolve_youtube_stream(channel_url, seed_video_url):
+    """Use only the requested official channel, with today's supplied video as seed."""
     try:
-        for extractor_args in [
-            "youtube:player_client=web,android,tv",
-            "youtube:player_client=web_safari",
-        ]:
-            result = subprocess.run([
-                "yt-dlp", "--no-warnings", "--ignore-config",
-                "--extractor-args", extractor_args,
-                "--get-url", "-f", "best[protocol^=m3u8]/best", video_url,
-            ], capture_output=True, text=True, timeout=90, check=False)
-            for url in result.stdout.splitlines():
-                url = url.strip()
-                if url.startswith("http") and (".m3u8" in url or "googlevideo.com" in url):
-                    return url
+        # First ask the official channel's Streams page for a currently-live video.
+        result = subprocess.run([
+            "yt-dlp", "--no-warnings", "--ignore-config", "--flat-playlist",
+            "--playlist-end", "10", "--match-filter", "live_status=is_live",
+            "--print", "id", channel_url,
+        ], capture_output=True, text=True, timeout=90, check=False)
+        video_ids = [x.strip() for x in result.stdout.splitlines() if re.fullmatch(r"[A-Za-z0-9_-]{11}", x.strip())]
+        candidates = [f"https://www.youtube.com/watch?v={video_ids[0]}"] if video_ids else []
+        candidates.append(seed_video_url)
+
+        for video_url in candidates:
+            for extractor_args in [
+                "youtube:player_client=web,android,tv",
+                "youtube:player_client=web_safari",
+            ]:
+                result = subprocess.run([
+                    "yt-dlp", "--no-warnings", "--ignore-config",
+                    "--extractor-args", extractor_args, "--get-url",
+                    "-f", "best[protocol^=m3u8]/best", video_url,
+                ], capture_output=True, text=True, timeout=90, check=False)
+                for url in result.stdout.splitlines():
+                    url = url.strip()
+                    if url.startswith("http") and (".m3u8" in url or "googlevideo.com" in url):
+                        return url
     except Exception as exc:
-        print(f"YouTube resolver error for {video_url}: {exc}")
+        print(f"YouTube resolver error for {channel_url}: {exc}")
     return None
 
 
@@ -99,7 +110,6 @@ def main():
     existing = read_existing_entries()
     discovered = []
 
-    # Main.jsp is the primary official MOMO source; live.momo is fallback.
     for page_url in PAGE_URLS:
         try:
             discovered.extend(find_ids(fetch(page_url)))
@@ -123,8 +133,8 @@ def main():
         if stream:
             lines += [f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" group-title="MOMO",{name}', stream, ""]
 
-    for tvg_id, name, video_url in YOUTUBE_SOURCES:
-        stream = resolve_youtube_stream(video_url) or existing.get(tvg_id)
+    for tvg_id, name, channel_url, seed_video_url in YOUTUBE_SOURCES:
+        stream = resolve_youtube_stream(channel_url, seed_video_url) or existing.get(tvg_id)
         if stream:
             lines += [f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" group-title="MOMO YouTube",{name}', stream, ""]
 
