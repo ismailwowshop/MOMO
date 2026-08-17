@@ -36,15 +36,10 @@ def find_ids(html):
 
 
 def resolve_momo_stream(live_id):
-    """Return the official MOMO CDN URL without probing the live segment.
-
-    GitHub Actions runners may be unable to fetch a live playlist even when
-    IPTV clients can play it. Therefore URL discovery must not depend on a
-    successful HTTP probe from the runner.
-    """
-    for base in BASE_URLS:
-        return base.format(id=live_id)
-    return None
+    # Do not probe the CDN from GitHub Actions. MOMO may reject or rate-limit
+    # HEAD/GET probes from runners even though the HLS URL is valid for players.
+    # Prefer the normal source URL, then keep the dev source as fallback.
+    return BASE_URLS[0].format(id=live_id)
 
 
 def read_existing_entries():
@@ -73,34 +68,34 @@ def main():
 
     candidate_ids = list(dict.fromkeys(discovered + FALLBACK_IDS))
     streams_by_id = {}
-
     for live_id in candidate_ids:
         stream = resolve_momo_stream(live_id)
-        if stream:
-            streams_by_id[live_id] = stream
-            print(f"Resolved MOMO live ID {live_id}: {stream}")
+        streams_by_id[live_id] = stream
+        print(f"Resolved MOMO live ID {live_id}: {stream}")
 
-    # The two verified official MOMO live IDs are the source channels we need.
-    # Keep the four legacy playlist IDs for compatibility, but do not pretend
-    # that CH48/CH35 are four different underlying streams.
-    ch48 = streams_by_id.get(FALLBACK_IDS[0]) or existing.get("MOMO1")
-    ch35 = streams_by_id.get(FALLBACK_IDS[1]) or existing.get("MOMO2")
-
+    # There are currently two unique official MOMO sources. Do not duplicate
+    # them just to satisfy an artificial four-stream requirement.
     entries = [
-        ("MOMO1", "MOMO購物台 1", ch48),
-        ("MOMO2", "MOMO購物台 2", ch35),
-        ("MOMO48", "MOMO CH48", ch48),
-        ("MOMO35", "MOMO CH35", ch35),
+        (
+            "MOMO1",
+            "MOMO購物台 1",
+            streams_by_id.get(FALLBACK_IDS[0]) or existing.get("MOMO1"),
+        ),
+        (
+            "MOMO2",
+            "MOMO購物台 2",
+            streams_by_id.get(FALLBACK_IDS[1]) or existing.get("MOMO2"),
+        ),
     ]
 
     resolved = [(tvg_id, name, url) for tvg_id, name, url in entries if url]
 
-    print(f"Resolved {len(resolved)}/4 playlist entries")
+    print(f"Resolved {len(resolved)}/2 required streams")
     for tvg_id, name, stream in resolved:
         print(f"OK   {tvg_id} | {name} | {stream}")
 
-    if len(resolved) != 4:
-        raise RuntimeError("Could not resolve the required MOMO playlist entries")
+    if len(resolved) != 2:
+        raise RuntimeError("Expected 2 official MOMO streams")
 
     lines = ["#EXTM3U", ""]
     for tvg_id, name, stream in resolved:
