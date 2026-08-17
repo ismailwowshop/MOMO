@@ -1,7 +1,13 @@
 #EXTM3U
 
-#EXTINF:-1 tvg-id="MOMO1" tvg-name="MOMO購物台 1" group-title="MOMO",MOMO購物台 1
+#EXTINF:-1 tvg-id="MOMO1" tvg-name="MOMO購物台 1 - Official HLS" group-title="MOMO",MOMO購物台 1 - Official HLS
 https://livestream-dev-source.momoshop.com.tw/live/0601100008j8dsB000.m3u8
 
-#EXTINF:-1 tvg-id="MOMO2" tvg-name="MOMO購物台 2" group-title="MOMO",MOMO購物台 2
+#EXTINF:-1 tvg-id="MOMO2" tvg-name="MOMO購物台 2 - Official HLS" group-title="MOMO",MOMO購物台 2 - Official HLS
 https://livestream-dev-source.momoshop.com.tw/live/0527090004rwwhA000.m3u8
+
+#EXTINF:-1 tvg-id="MOMO1-YT" tvg-name="MOMO購物一台 CH48 - YouTube" group-title="MOMO YouTube",MOMO購物一台 CH48 - YouTube
+https://www.youtube.com/@momoch4812
+
+#EXTINF:-1 tvg-id="MOMO2-YT" tvg-name="MOMO購物二台 CH35 - YouTube" group-title="MOMO YouTube",MOMO購物二台 CH35 - YouTube
+https://www.youtube.com/@momoch3571
